@@ -15,10 +15,8 @@ app.use(express.json());
 
 // Initialize Gemini AI (with fallback for demo)
 let genAI;
-console.log("process.env.GEMINI_API_KEY.....")
-console.log(process.env.GEMINI_API_KEY)
 if (process.env.GEMINI_API_KEY) {
-  genAI = new GoogleGenAI({ apiKey: 'AIzaSyCtD6Kl4djzbfPhqXyCSYbG71nOYFISbcA' });
+  genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 }
 
 // Business types data
@@ -108,6 +106,7 @@ const generateMockEmails = (businessType, service, tone) => {
 // Generate emails using Gemini AI
 const generateEmailsWithAI = async (businessType, service, tone) => {
   try {
+    console.log(`Generating emails for - ${businessType}, ${service}, ${tone}`)
     const prompt = `Generate 3 different cold email variations for a freelancer offering ${service} to a ${businessType}. 
     
     Requirements:
@@ -134,6 +133,7 @@ const generateEmailsWithAI = async (businessType, service, tone) => {
       model: 'gemini-2.5-flash-lite'
     });
     const text = result.text;
+    console.log('Emails generation Success!!')
 
     // Try to parse JSON from the response
     try {
@@ -144,10 +144,10 @@ const generateEmailsWithAI = async (businessType, service, tone) => {
     } catch (parseError) {
       console.log('Failed to parse AI response as JSON, using mock data');
     }
-    
+
     // Fallback to mock if parsing fails
     return generateMockEmails(businessType, service, tone);
-    
+
   } catch (error) {
     console.error('Error generating emails with AI:', error);
     return generateMockEmails(businessType, service, tone);
