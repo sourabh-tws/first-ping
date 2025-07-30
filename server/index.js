@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 require('dotenv').config();
 
 const app = express();
@@ -15,8 +15,10 @@ app.use(express.json());
 
 // Initialize Gemini AI (with fallback for demo)
 let genAI;
+console.log("process.env.GEMINI_API_KEY.....")
+console.log(process.env.GEMINI_API_KEY)
 if (process.env.GEMINI_API_KEY) {
-  genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  genAI = new GoogleGenAI({ apiKey: 'AIzaSyCtD6Kl4djzbfPhqXyCSYbG71nOYFISbcA' });
 }
 
 // Business types data
@@ -106,8 +108,6 @@ const generateMockEmails = (businessType, service, tone) => {
 // Generate emails using Gemini AI
 const generateEmailsWithAI = async (businessType, service, tone) => {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    
     const prompt = `Generate 3 different cold email variations for a freelancer offering ${service} to a ${businessType}. 
     
     Requirements:
@@ -129,10 +129,12 @@ const generateEmailsWithAI = async (businessType, service, tone) => {
       }
     ]`;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    
+    const result = await genAI.models.generateContent({
+      contents: prompt,
+      model: 'gemini-2.5-flash-lite'
+    });
+    const text = result.text;
+
     // Try to parse JSON from the response
     try {
       const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -168,7 +170,7 @@ app.get('/api/tones', (req, res) => {
 app.post('/api/generate', async (req, res) => {
   try {
     const { businessType, service, tone } = req.body;
-    
+
     // Validation
     if (!businessType || !service || !tone) {
       return res.status(400).json({
@@ -177,7 +179,7 @@ app.post('/api/generate', async (req, res) => {
     }
 
     let emails;
-    
+
     if (genAI && process.env.GEMINI_API_KEY) {
       emails = await generateEmailsWithAI(businessType, service, tone);
     } else {
@@ -186,7 +188,7 @@ app.post('/api/generate', async (req, res) => {
     }
 
     res.json({ emails });
-    
+
   } catch (error) {
     console.error('Error generating emails:', error);
     res.status(500).json({
