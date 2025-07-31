@@ -111,43 +111,51 @@ const generateMockEmails = (businessType, service, tone) => {
 // Generate emails using Gemini AI
 const generateEmailsWithAI = async (data) => {
   try {
-    const { 
-      targetType, 
-      businessType, 
-      service, 
-      tone, 
-      linkedinProfile, 
-      companyNews 
+    const {
+      targetType,
+      businessType,
+      service,
+      tone,
+      linkedinProfile,
+      companyNews
     } = data;
-    
-    console.log(`Generating emails for ${targetType} - ${businessType || (linkedinProfile ? linkedinProfile.name : 'Unknown')}, ${service}, ${tone}`);
-    
+
+    console.log(`Generating emails for ${targetType} - ${businessType || (linkedinProfile ? linkedinProfile.fullName : 'Unknown')}, ${service}, ${tone}`);
+
     let prompt;
-    
+    const jsonActivities = linkedinProfile.recent_posts.map(activity => {
+      return JSON.stringify(activity);
+    });
+
     if (targetType === 'individual' && linkedinProfile) {
       // Generate prompt for individual targeting with LinkedIn data
-      const newsContext = companyNews && companyNews.length > 0 
+      const newsContext = companyNews && companyNews.length > 0
         ? `\nRecent company news:\n${companyNews.map(news => `- ${news.title}: ${news.description}`).join('\n')}`
         : '';
-        
+
       prompt = `Generate 3 different highly personalized cold email variations for a freelancer offering ${service} to an individual person.
 
       Person's Information:
-      - Name: ${linkedinProfile.name}
+      - Name: ${linkedinProfile.fullName}
       - Job Title: ${linkedinProfile.headline}
-      - Company: ${linkedinProfile.company}
+      - Company: ${linkedinProfile.currentCompany.company_name}
+      - Company URL: ${linkedinProfile.currentCompany.company_url}
       - About: ${linkedinProfile.about}
-      - Recent LinkedIn Activity: ${linkedinProfile.recent_posts.join(' | ')}${newsContext}
+      - Location: ${linkedinProfile.location}
+      - Recent LinkedIn Activity: ${jsonActivities.join(' | ')}${newsContext}
+      - Recent News: ${newsContext}
       
       Requirements:
       - Tone: ${tone}
       - Each email should have a compelling subject line
-      - Body should be 100-120 words
+      - Body should be 80 -100 words
       - Reference specific details from their profile or company news to show you've done your research
       - Focus on value proposition and results relevant to their role and company
       - Include a clear call-to-action
       - Make them feel genuinely personalized, not generic
       - Avoid being too salesy
+      - Include PS line which is eye catchy and prompts viewer to read email
+      - Subject line should be related to research done above and it should prompt viewer to open email
       
       Format the response as a JSON array with objects containing 'subject' and 'body' fields.
       
@@ -160,10 +168,10 @@ const generateEmailsWithAI = async (data) => {
       ]`;
     } else {
       // Generate prompt for business targeting
-      const newsContext = companyNews && companyNews.length > 0 
+      const newsContext = companyNews && companyNews.length > 0
         ? `\nIncorporate these recent news items about this type of business:\n${companyNews.map(news => `- ${news.title}: ${news.description}`).join('\n')}`
         : '';
-        
+
       prompt = `Generate 3 different cold email variations for a freelancer offering ${service} to a ${businessType}.
       
       Requirements:
@@ -173,6 +181,7 @@ const generateEmailsWithAI = async (data) => {
       - Focus on value proposition and results
       - Include a clear call-to-action
       - Make them feel personalized and not generic
+      - Recent News: ${newsContext}
       - Avoid being too salesy${newsContext}
       
       Format the response as a JSON array with objects containing 'subject' and 'body' fields.
@@ -212,7 +221,7 @@ const generateEmailsWithAI = async (data) => {
 
   } catch (error) {
     console.error('Error generating emails with AI:', error);
-    
+
     if (data.targetType === 'individual' && data.linkedinProfile) {
       return generateMockIndividualEmails(data.linkedinProfile, data.service, data.tone);
     } else {
@@ -225,7 +234,7 @@ const generateEmailsWithAI = async (data) => {
 const generateMockIndividualEmails = (profile, service, tone) => {
   const { name, headline, company } = profile;
   const firstName = name.split(' ')[0];
-  
+
   const mockEmails = [
     {
       subject: `${firstName}, could ${service} help ${company} with its growth?`,
@@ -259,12 +268,12 @@ app.get('/api/tones', (req, res) => {
 
 app.post('/api/generate', async (req, res) => {
   try {
-    const { 
-      targetType, 
-      businessType, 
-      service, 
-      tone, 
-      linkedinUrl 
+    const {
+      targetType,
+      businessType,
+      service,
+      tone,
+      linkedinUrl
     } = req.body;
 
     // Validation
@@ -293,10 +302,10 @@ app.post('/api/generate', async (req, res) => {
     if (targetType === 'individual' && linkedinUrl) {
       try {
         linkedinProfile = await scrapeLinkedInProfile(linkedinUrl);
-        
+
         // If we have a company name from the profile, fetch company news
-        if (linkedinProfile.company) {
-          companyNews = await fetchCompanyNews(linkedinProfile.company);
+        if (linkedinProfile.currentCompany) {
+          companyNews = await fetchCompanyNews(linkedinProfile.currentCompany.company_name);
         }
       } catch (error) {
         console.error('Error fetching LinkedIn profile:', error);
@@ -339,19 +348,20 @@ app.post('/api/generate', async (req, res) => {
 
 // LinkedIn Profile Scraping
 async function scrapeLinkedInProfile(linkedinUrl) {
+  const username = linkedinUrl.match(/linkedin\.com\/in\/([^\/?#]+)/)?.[1];
   const cacheKey = `linkedin_${linkedinUrl}`;
-  
+
   // Check if we have cached data
   const cachedData = apiCache.get(cacheKey);
   if (cachedData) {
     console.log('Using cached LinkedIn data');
     return cachedData;
   }
-  
+
   try {
     // Replace with your actual ScrapingDog API key
     const SCRAPING_DOG_API_KEY = process.env.SCRAPING_DOG_API_KEY || 'demo_key';
-    
+
     // For demo purposes, return mock data if no API key is provided
     if (SCRAPING_DOG_API_KEY === 'demo_key') {
       console.log('Using mock LinkedIn data (no ScrapingDog API key)');
@@ -365,33 +375,40 @@ async function scrapeLinkedInProfile(linkedinUrl) {
           "Excited to announce our new product launch next month. Stay tuned for more details!"
         ]
       };
-      
+
       // Cache the mock data
       apiCache.set(cacheKey, mockData);
       return mockData;
     }
-    
+
     // Make the actual API call to ScrapingDog
     const response = await axios.get('https://api.scrapingdog.com/linkedin', {
       params: {
         api_key: SCRAPING_DOG_API_KEY,
-        url: linkedinUrl
+        linkId: username,
+        type: 'profile',
+        premium: false
       }
     });
-    
+
     // Process and format the response
     const profileData = {
-      name: response.data.name || '',
-      headline: response.data.headline || '',
-      company: response.data.company || '',
-      about: response.data.about || '',
-      recent_posts: response.data.recent_posts || []
+      first_name: response.data[0].first_name || '',
+      last_name: response.data[0].last_name || '',
+      fullName: response.data[0].fullName || '',
+      headline: response.data[0].headline || '',
+      currentCompany: response.data[0].experience[0] || '',
+      about: response.data[0].about || '',
+      location: response.data[0].location || '',
+      followers: response.data[0].followers || '',
+      connections: response.data[0].connections || '',
+      recent_posts: response.data[0].activities.slice(0, 10) || [],
     };
-    
+
     // Cache the data
     apiCache.set(cacheKey, profileData);
     return profileData;
-    
+
   } catch (error) {
     console.error('Error scraping LinkedIn profile:', error);
     throw new Error('Failed to scrape LinkedIn profile');
@@ -401,18 +418,18 @@ async function scrapeLinkedInProfile(linkedinUrl) {
 // News API Integration
 async function fetchCompanyNews(companyName) {
   const cacheKey = `news_${companyName}`;
-  
+
   // Check if we have cached data
   const cachedData = apiCache.get(cacheKey);
   if (cachedData) {
     console.log('Using cached news data');
     return cachedData;
   }
-  
+
   try {
     // Replace with your actual News API key
     const NEWS_API_KEY = process.env.NEWS_API_KEY || 'demo_key';
-    
+
     // For demo purposes, return mock data if no API key is provided
     if (NEWS_API_KEY === 'demo_key') {
       console.log('Using mock news data (no News API key)');
@@ -430,12 +447,12 @@ async function fetchCompanyNews(companyName) {
           publishedAt: "2025-07-15T09:45:00Z"
         }
       ];
-      
+
       // Cache the mock data
       apiCache.set(cacheKey, mockNews);
       return mockNews;
     }
-    
+
     // Make the actual API call to News API
     const response = await axios.get('https://newsapi.org/v2/everything', {
       params: {
@@ -446,19 +463,21 @@ async function fetchCompanyNews(companyName) {
         pageSize: 5
       }
     });
-    
+
     // Process and format the response
     const newsArticles = response.data.articles.map(article => ({
       title: article.title,
       description: article.description,
       url: article.url,
-      publishedAt: article.publishedAt
+      publishedAt: article.publishedAt,
+      source: article?.source?.name,
+      content: article?.content,
     }));
-    
+
     // Cache the data
     apiCache.set(cacheKey, newsArticles);
     return newsArticles;
-    
+
   } catch (error) {
     console.error('Error fetching company news:', error);
     return []; // Return empty array on error
@@ -469,16 +488,16 @@ async function fetchCompanyNews(companyName) {
 app.post('/api/linkedin-profile', async (req, res) => {
   try {
     const { linkedinUrl } = req.body;
-    
+
     if (!linkedinUrl) {
       return res.status(400).json({
         error: 'LinkedIn URL is required'
       });
     }
-    
+
     const profileData = await scrapeLinkedInProfile(linkedinUrl);
     res.json({ profile: profileData });
-    
+
   } catch (error) {
     console.error('Error in LinkedIn profile endpoint:', error);
     res.status(500).json({
@@ -491,16 +510,16 @@ app.post('/api/linkedin-profile', async (req, res) => {
 app.get('/api/company-news/:companyName', async (req, res) => {
   try {
     const { companyName } = req.params;
-    
+
     if (!companyName) {
       return res.status(400).json({
         error: 'Company name is required'
       });
     }
-    
+
     const newsData = await fetchCompanyNews(companyName);
     res.json({ news: newsData });
-    
+
   } catch (error) {
     console.error('Error in company news endpoint:', error);
     res.status(500).json({
@@ -516,23 +535,23 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at http://localhost:${PORT}`);
-  
+
   // Check for API keys and show appropriate messages
   if (!process.env.GEMINI_API_KEY) {
     console.log('⚠️  No GEMINI_API_KEY found. Using mock data for email generation.');
     console.log('   Add GEMINI_API_KEY to .env file for AI-powered email generation.');
   }
-  
+
   if (!process.env.SCRAPING_DOG_API_KEY) {
     console.log('⚠️  No SCRAPING_DOG_API_KEY found. Using mock data for LinkedIn profile scraping.');
     console.log('   Add SCRAPING_DOG_API_KEY to .env file for real LinkedIn profile data.');
   }
-  
+
   if (!process.env.NEWS_API_KEY) {
     console.log('⚠️  No NEWS_API_KEY found. Using mock data for company news.');
     console.log('   Add NEWS_API_KEY to .env file for real company news data.');
   }
-  
+
   console.log('\n🚀 FirstPing v2 is ready with:');
   console.log('   - LinkedIn profile targeting');
   console.log('   - Company news integration');
