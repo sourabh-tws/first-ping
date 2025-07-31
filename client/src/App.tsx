@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
-import { Mail, Copy, Loader2, Sparkles } from 'lucide-react';
+import { Mail, Copy, Loader2, Sparkles, Link, Newspaper } from 'lucide-react';
+import Toggle from 'react-toggle';
+import "react-toggle/style.css";
 import './App.css';
 
 interface Email {
@@ -10,24 +12,46 @@ interface Email {
 }
 
 interface FormData {
+  targetType: 'business' | 'individual';
   businessType: string;
   service: string;
   tone: string;
+  linkedinUrl: string;
+}
+
+interface LinkedInProfile {
+  name: string;
+  headline: string;
+  company: string;
+  about: string;
+  recent_posts: string[];
+}
+
+interface NewsItem {
+  title: string;
+  description: string;
+  url: string;
+  publishedAt: string;
 }
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:12001';
 
 function App() {
   const [formData, setFormData] = useState<FormData>({
+    targetType: 'business',
     businessType: '',
     service: '',
-    tone: ''
+    tone: '',
+    linkedinUrl: ''
   });
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(false);
   const [businessTypes, setBusinessTypes] = useState<string[]>([]);
   const [services, setServices] = useState<string[]>([]);
   const [tones, setTones] = useState<string[]>([]);
+  const [linkedinProfile, setLinkedinProfile] = useState<LinkedInProfile | null>(null);
+  const [companyNews, setCompanyNews] = useState<NewsItem[]>([]);
+  const [fetchingProfile, setFetchingProfile] = useState(false);
 
   // Load dropdown options on component mount
   useEffect(() => {
@@ -57,20 +81,91 @@ function App() {
       ...prev,
       [name]: value
     }));
+    
+    // Reset LinkedIn profile data when changing target type
+    if (name === 'targetType') {
+      setLinkedinProfile(null);
+      setCompanyNews([]);
+    }
+  };
+  
+  const handleToggleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const targetType = e.target.checked ? 'individual' : 'business';
+    setFormData(prev => ({
+      ...prev,
+      targetType
+    }));
+    
+    // Reset LinkedIn profile data when changing target type
+    setLinkedinProfile(null);
+    setCompanyNews([]);
+  };
+  
+  const fetchLinkedInProfile = async () => {
+    if (!formData.linkedinUrl) {
+      toast.error('Please enter a LinkedIn URL');
+      return;
+    }
+    
+    setFetchingProfile(true);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/linkedin-profile`, {
+        linkedinUrl: formData.linkedinUrl
+      });
+      
+      const profile = response.data.profile;
+      setLinkedinProfile(profile);
+      
+      // If we have a company name, fetch company news
+      if (profile.company) {
+        try {
+          const newsResponse = await axios.get(`${API_BASE_URL}/api/company-news/${encodeURIComponent(profile.company)}`);
+          setCompanyNews(newsResponse.data.news);
+        } catch (error) {
+          console.error('Error fetching company news:', error);
+        }
+      }
+      
+      toast.success('LinkedIn profile data retrieved successfully!');
+    } catch (error) {
+      console.error('Error fetching LinkedIn profile:', error);
+      toast.error('Failed to retrieve LinkedIn profile data');
+    } finally {
+      setFetchingProfile(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
-    if (!formData.businessType || !formData.service || !formData.tone) {
-      toast.error('Please fill in all fields');
+    if (!formData.service || !formData.tone) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    if (formData.targetType === 'business' && !formData.businessType) {
+      toast.error('Please select a business type');
+      return;
+    }
+    
+    if (formData.targetType === 'individual' && !formData.linkedinUrl) {
+      toast.error('Please enter a LinkedIn URL');
+      return;
+    }
+    
+    // If targeting an individual but haven't fetched profile data yet, fetch it first
+    if (formData.targetType === 'individual' && !linkedinProfile) {
+      toast.error('Please fetch LinkedIn profile data first');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/generate`, formData);
+      const response = await axios.post(`${API_BASE_URL}/api/generate`, {
+        ...formData,
+        targetType: formData.targetType
+      });
       setEmails(response.data.emails);
       toast.success('Emails generated successfully!');
     } catch (error) {
@@ -113,31 +208,88 @@ function App() {
         {/* Input Form */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Target Type Toggle */}
+            <div className="flex justify-center items-center space-x-4 mb-4">
+              <span className={`text-sm font-medium ${formData.targetType === 'business' ? 'text-primary-600' : 'text-gray-500'}`}>
+                Business
+              </span>
+              <Toggle
+                id="targetType"
+                checked={formData.targetType === 'individual'}
+                onChange={handleToggleChange}
+                icons={false}
+                className="custom-toggle"
+              />
+              <span className={`text-sm font-medium ${formData.targetType === 'individual' ? 'text-primary-600' : 'text-gray-500'}`}>
+                Individual (LinkedIn)
+              </span>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Business Type */}
-              <div>
-                <label htmlFor="businessType" className="block text-sm font-medium text-gray-700 mb-2">
-                  Business Type
-                </label>
-                <input
-                  type="text"
-                  id="businessType"
-                  name="businessType"
-                  value={formData.businessType}
-                  onChange={handleInputChange}
-                  placeholder="e.g., eCommerce Store, SaaS Company"
-                  list="businessTypes"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
-                  required
-                />
-                <datalist id="businessTypes">
-                  {businessTypes.map((type, index) => (
-                    <option key={index} value={type} />
-                  ))}
-                </datalist>
-              </div>
+              {/* Conditional Fields Based on Target Type */}
+              {formData.targetType === 'business' ? (
+                /* Business Type */
+                <div>
+                  <label htmlFor="businessType" className="block text-sm font-medium text-gray-700 mb-2">
+                    Business Type
+                  </label>
+                  <input
+                    type="text"
+                    id="businessType"
+                    name="businessType"
+                    value={formData.businessType}
+                    onChange={handleInputChange}
+                    placeholder="e.g., eCommerce Store, SaaS Company"
+                    list="businessTypes"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                    required={formData.targetType === 'business'}
+                  />
+                  <datalist id="businessTypes">
+                    {businessTypes.map((type, index) => (
+                      <option key={index} value={type} />
+                    ))}
+                  </datalist>
+                </div>
+              ) : (
+                /* LinkedIn URL */
+                <div>
+                  <label htmlFor="linkedinUrl" className="block text-sm font-medium text-gray-700 mb-2">
+                    LinkedIn Profile URL
+                  </label>
+                  <div className="flex">
+                    <input
+                      type="url"
+                      id="linkedinUrl"
+                      name="linkedinUrl"
+                      value={formData.linkedinUrl}
+                      onChange={handleInputChange}
+                      placeholder="e.g., https://www.linkedin.com/in/username"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                      required={formData.targetType === 'individual'}
+                    />
+                    <button
+                      type="button"
+                      onClick={fetchLinkedInProfile}
+                      disabled={fetchingProfile || !formData.linkedinUrl}
+                      className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-3 rounded-r-lg font-medium flex items-center transition-colors"
+                    >
+                      {fetchingProfile ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <Link className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                  {linkedinProfile && (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg text-sm">
+                      <p className="font-medium text-gray-900">{linkedinProfile.name}</p>
+                      <p className="text-gray-600">{linkedinProfile.headline}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
-              {/* Service */}
+              {/* Service - Common for both types */}
               <div>
                 <label htmlFor="service" className="block text-sm font-medium text-gray-700 mb-2">
                   Your Service
@@ -160,7 +312,7 @@ function App() {
                 </datalist>
               </div>
 
-              {/* Tone */}
+              {/* Tone - Common for both types */}
               <div>
                 <label htmlFor="tone" className="block text-sm font-medium text-gray-700 mb-2">
                   Tone of Voice
@@ -180,11 +332,26 @@ function App() {
                 </select>
               </div>
             </div>
+            
+            {/* Display Company News if available */}
+            {companyNews.length > 0 && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center mb-2">
+                  <Newspaper className="h-5 w-5 text-primary-600 mr-2" />
+                  <h3 className="text-sm font-medium text-gray-900">Recent News</h3>
+                </div>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  {companyNews.slice(0, 2).map((news, index) => (
+                    <li key={index} className="truncate">• {news.title}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="flex justify-center">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (formData.targetType === 'individual' && !linkedinProfile)}
                 className="bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-8 py-3 rounded-lg font-medium flex items-center space-x-2 transition-colors"
               >
                 {loading ? (
