@@ -1,6 +1,10 @@
-# Cold Email Generator for Freelancers
+# FirstPing: Advanced Cold Email Generator for Freelancers
 
-A web application that generates 3 ready-to-send cold emails based on user input: business type, offered service, and tone of voice.
+A web application that generates highly personalized cold emails based on:
+1. Target type (business or individual via LinkedIn)
+2. Offered service
+3. Tone of voice
+4. Recent company news and events
 
 ## 🎯 Problem Statement
 
@@ -15,8 +19,10 @@ Freelancers and agencies often struggle to write high-converting cold emails. Mo
 
 ## 🛠 Features
 
-### MVP Scope
-- **Business Type Input**: Choose from 20+ high-earning business types
+### Core Features
+- **Dual Targeting Modes**: 
+  - **Business targeting**: Choose from 20+ high-earning business types
+  - **Individual targeting**: Generate hyper-personalized emails using LinkedIn profile data
 - **Service Input**: Select from 24+ top-earning services in the industry
 - **Tone Selection**: Pick from 8 different email tones
 - **AI-Generated Emails**: Get 3 unique email variations with subject lines and bodies (100-120 words)
@@ -25,15 +31,27 @@ Freelancers and agencies often struggle to write high-converting cold emails. Mo
 - **Form Validation**: Ensures all fields are filled before submission
 - **Loading States**: Shows spinner while generating emails
 
+### Advanced Personalization
+- **LinkedIn Profile Integration**: Extract professional details to create highly personalized emails
+- **News & Events Integration**: Incorporate recent company news for timely, relevant outreach
+- **Personalized Subject Lines**: Generate attention-grabbing subject lines based on target data
+- **Role-Specific Value Props**: Tailor value propositions to the recipient's specific role and industry
+
 ## 🔧 Tech Stack
 
 - **Frontend**: React with TypeScript
 - **Backend**: Express.js
 - **AI Model**: Google Gemini Pro API
+- **Data Sources**:
+  - ScrapingDog API (LinkedIn profiles)
+  - News API (company news)
 - **Styling**: TailwindCSS
-- **Icons**: Lucide React
+- **Components**:
+  - React Toggle (targeting mode switch)
+  - Lucide React (icons)
 - **Notifications**: React Hot Toast
 - **HTTP Client**: Axios
+- **Caching**: Node-Cache (API response caching)
 
 ## 🚀 Getting Started
 
@@ -67,12 +85,19 @@ Freelancers and agencies often struggle to write high-converting cold emails. Mo
    cp .env.example .env
    ```
    
-   Edit `.env` and add your Google Gemini API key:
+   Edit `.env` and add your API keys:
    ```
    GEMINI_API_KEY=your_gemini_api_key_here
+   SCRAPING_DOG_API_KEY=your_scrapingdog_api_key_here
+   NEWS_API_KEY=your_news_api_key_here
    ```
 
-   Get your API key from: https://makersuite.google.com/app/apikey
+   Get your API keys from:
+   - Google Gemini API: https://makersuite.google.com/app/apikey
+   - ScrapingDog API: https://www.scrapingdog.com/
+   - News API: https://newsapi.org/
+
+   Note: The application will work with mock data if API keys are not provided.
 
 ### Running the Application
 
@@ -124,8 +149,17 @@ Returns array of available tones
 
 ### POST `/api/generate`
 Generates cold emails based on input
-- **Body**: `{ businessType, service, tone }`
+- **Body**: `{ targetType, businessType, service, tone, linkedinUrl }`
 - **Response**: `{ emails: [{ subject, body }, ...] }`
+
+### POST `/api/linkedin-profile`
+Fetches LinkedIn profile data
+- **Body**: `{ linkedinUrl }`
+- **Response**: `{ profile: { name, headline, company, about, recent_posts } }`
+
+### GET `/api/company-news/:companyName`
+Fetches recent news about a company
+- **Response**: `{ news: [{ title, description, url, publishedAt }, ...] }`
 
 ### GET `/api/health`
 Health check endpoint
@@ -134,23 +168,46 @@ Health check endpoint
 
 - **Clean, minimal design** with gradient background
 - **Responsive layout** that works on all devices
+- **Target type toggle** to switch between business and individual targeting
+- **LinkedIn profile preview** showing extracted data
+- **Company news display** showing recent news items
 - **Form with autocomplete** for business types and services
-- **Loading spinner** during email generation
+- **Loading spinners** during profile fetching and email generation
 - **Toast notifications** for user feedback
 - **Copy to clipboard** functionality
 - **Email cards** with clear subject/body separation
 
 ## 🧪 Demo Mode
 
-The application works without a Gemini API key by using mock data. This allows you to test the functionality before setting up the AI integration.
+The application works without API keys by using mock data:
+- Without a Gemini API key: Uses pre-defined email templates
+- Without a ScrapingDog API key: Uses mock LinkedIn profile data
+- Without a News API key: Uses mock company news
 
-## 💰 Future Monetization Ideas (V2)
+This allows you to test all functionality before setting up the API integrations.
 
-- Offer basic tool free, upsell full email sequences
-- Premium email packs behind paywall
-- Email export/download feature behind email capture
-- Outreach dashboard with stats
+## 💰 Monetization Strategy
+
+### Free Tier
+- Business targeting with limited personalization
+- Up to 10 emails per day
+- Basic templates only
+
+### Premium Tier ($19/month)
+- LinkedIn profile targeting with deep personalization
+- Company news integration
+- Unlimited emails
+- Advanced templates and tones
+- Email sequence generation (initial + follow-ups)
+- Export to CSV/PDF
+
+### Enterprise Tier ($49/month)
+- Team collaboration features
+- Custom templates library
+- API access for integration
+- Outreach dashboard with analytics
 - Integration with email platforms
+- Priority support
 
 ## 🚀 Deployment
 
